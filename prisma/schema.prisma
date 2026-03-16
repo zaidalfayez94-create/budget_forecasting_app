@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum Province {
+  ON
+  BC
+  AB
+  QC
+  MB
+  SK
+  NS
+  NB
+  PEI
+  NL
+}
+
+enum PlanType {
+  INDIVIDUAL
+  COUPLE
+}
+
+// ─────────────────────────────────────────────
+// User — mirrors Supabase auth.users
+// ─────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  profile    UserProfile?
+  engagement UserEngagement?
+  plans      FinancialPlan[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// UserProfile — queryable demographic columns
+// ─────────────────────────────────────────────
+
+model UserProfile {
+  id                   String    @id @default(uuid())
+  userId               String    @unique @map("user_id")
+  firstName            String    @map("first_name")
+  dateOfBirth          DateTime  @map("date_of_birth") @db.Date
+  province             Province
+  planType             PlanType  @map("plan_type")
+  partnerDateOfBirth   DateTime? @map("partner_date_of_birth") @db.Date
+  consentToMarketing   Boolean   @default(false) @map("consent_to_marketing")
+  consentDate          DateTime? @map("consent_date")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+// ─────────────────────────────────────────────
+// UserEngagement — retention & engagement metrics
+// ─────────────────────────────────────────────
+
+model UserEngagement {
+  id                     String    @id @default(uuid())
+  userId                 String    @unique @map("user_id")
+  onboardingStepReached  Int       @default(0) @map("onboarding_step_reached")
+  onboardingCompletedAt  DateTime? @map("onboarding_completed_at")
+  scenariosCreated       Int       @default(0) @map("scenarios_created")
+  lastActiveAt           DateTime  @default(now()) @map("last_active_at")
+  totalSessions          Int       @default(0) @map("total_sessions")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_engagement")
+}
+
+// ─────────────────────────────────────────────
+// FinancialPlan
+// ─────────────────────────────────────────────
+
+model FinancialPlan {
+  id                   String   @id @default(uuid())
+  userId               String   @map("user_id")
+  name                 String
+  isBasePlan           Boolean  @default(false) @map("is_base_plan")
+
+  /// Full plan inputs as a JSON blob.
+  /// Shape: { profile, income, expenses, cashAccounts, investmentAccounts,
+  ///          realEstate, debts, businessAssets, cryptoAssets, retirementExpenses }
+  planData             Json     @map("plan_data")
+
+  /// Calculated yearly projections produced by calculateModel().
+  modelOutput          Json?    @map("model_output")
+
+  /// Queryable copy of the first retirement age derived from modelOutput.
+  firstRetirementAge   Int?     @map("first_retirement_age")
+
+  /// From plan profile — stored here so we can query target vs achievable gap.
+  targetRetirementAge  Int      @map("target_retirement_age")
+
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("financial_plans")
+}
